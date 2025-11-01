@@ -35,3 +35,17 @@ export function createToken(user: User): string {
     { expiresIn: "7d" }
   )
 }
+
+export async function getAuthenticatedUser(request: Request): Promise<User | null> {
+  try {
+    const token = request.headers.get("cookie")?.split("auth-token=")[1]?.split(";")[0]
+    
+    if (!token) {
+      return null
+    }
+    
+    return await verifyToken(token)
+  } catch (error) {
+    return null
+  }
+}
