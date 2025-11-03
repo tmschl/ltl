@@ -69,6 +69,7 @@ model LeagueMembership {
 
 model Game {
   id        String   @id @default(cuid())
+  nhlGamePk Int?     @unique // NHL API game ID (gamePk)
   homeTeam  String   @default("Detroit Red Wings")
   awayTeam  String
   gameDate  DateTime
@@ -86,16 +87,18 @@ model Game {
 
   @@index([gameDate])
   @@index([status])
+  @@index([nhlGamePk])
 }
 
 model Player {
-  id        String   @id @default(cuid())
-  name      String
-  number    Int?
-  position  String // Forward, Defense, Goalie
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  nhlPlayerId Int?     @unique // NHL API player ID
+  name        String
+  number      Int?
+  position    String // Forward, Defense, Goalie
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
   picks        Pick[]
@@ -103,6 +106,7 @@ model Player {
 
   @@unique([name, number])
   @@index([isActive])
+  @@index([nhlPlayerId])
 }
 
 model Pick {

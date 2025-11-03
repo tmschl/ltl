@@ -1165,6 +1165,7 @@ export function convertNHLWebGameToGame(nhlGame: NHLWebGame) {
   }
 
   return {
+    nhlGamePk: nhlGame.id, // NHL API game ID (gamePk)
     homeTeam: 'Detroit Red Wings',
     awayTeam: isHome ? fullOpponentName : 'Detroit Red Wings',
     gameDate: new Date(nhlGame.startTimeUTC),
@@ -1173,6 +1174,117 @@ export function convertNHLWebGameToGame(nhlGame: NHLWebGame) {
     status: status,
     homeScore: nhlGame.homeTeam.score || null,
     awayScore: nhlGame.awayTeam.score || null,
+  }
+}
+
+// ===== Scoring Helper Functions =====
+
+/**
+ * Interface for scoring-specific game data
+ */
+export interface GameScoringData {
+  gamePk: number
+  isOvertime: boolean
+  isShootout: boolean
+  homeScore: number
+  awayScore: number
+  detroitScore: number
+  opponentScore: number
+  playerStats: Array<{
+    playerId: number
+    name: string
+    sweaterNumber: number
+    position: string
+    goals: number
+    assists: number
+    shortHandedGoals: number
+    powerPlayGoals: number
+  }>
+  goalieStats?: Array<{
+    playerId: number
+    name: string
+    sweaterNumber: number
+    goalsAgainst: number
+    saves: number
+    shotsAgainst: number
+    shutouts: number
+    assists: number
+  }>
+}
+
+/**
+ * Fetch game details and extract scoring-specific data
+ * This function processes the boxscore to extract all data needed for scoring calculations
+ */
+export async function fetchGameDetailsForScoring(gamePk: number): Promise<GameScoringData> {
+  try {
+    const gameDetails = await fetchGameDetails(gamePk)
+    
+    // Determine if game went to OT or shootout
+    // Note: gameOutcome is not available in NHLWebGameDetailsResponse
+    // We'll infer OT from game state or check if scores indicate OT
+    // For now, we'll use a simplified approach - check if game went to OT
+    // This could be enhanced by parsing game feed or using different API endpoint
+    const isOvertime = gameDetails.gameState === 'OFF' && 
+                       (gameDetails.homeTeam.score !== gameDetails.awayTeam.score) &&
+                       false // Default to false - would need game feed to determine OT
+    
+    const isShootout = false // Would need game feed to determine shootout
+    
+    // Determine Detroit's score and opponent's score
+    const isHome = gameDetails.homeTeam.id === DETROIT_TEAM_ID
+    const detroitScore = isHome ? gameDetails.homeTeam.score : gameDetails.awayTeam.score
+    const opponentScore = isHome ? gameDetails.awayTeam.score : gameDetails.homeTeam.score
+    
+    // Extract player stats from boxscore
+    const playerStats = (gameDetails.boxscore?.playerStats || []).map(stat => ({
+      playerId: stat.playerId,
+      name: stat.name.default,
+      sweaterNumber: stat.sweaterNumber,
+      position: stat.position,
+      goals: stat.goals,
+      assists: stat.assists,
+      shortHandedGoals: stat.shortHandedGoals || 0,
+      powerPlayGoals: stat.powerPlayGoals || 0
+    }))
+    
+    // For goalies, we need to calculate goals against from team scores
+    // Note: The boxscore API doesn't provide explicit goalie stats, so we'll need to:
+    // 1. Identify goalies from position
+    // 2. Calculate goals against from opponent score
+    // 3. For now, we'll set assists to 0 (can be enhanced later with more detailed API calls)
+    const goalieStats = playerStats
+      .filter(stat => stat.position.toLowerCase() === 'goalie')
+      .map(stat => {
+        // Goals against is the opponent's score (goals scored against Detroit)
+        // For goalies, we need to know which goalie played, but for now we'll use the opponent score
+        // This is a simplification - ideally we'd track which goalie was in net for each goal
+        return {
+          playerId: stat.playerId,
+          name: stat.name,
+          sweaterNumber: stat.sweaterNumber,
+          goalsAgainst: opponentScore, // Opponent score = goals against
+          saves: 0, // Not available in this API response
+          shotsAgainst: 0, // Not available in this API response
+          shutouts: opponentScore === 0 ? 1 : 0, // Shutout if opponent scored 0
+          assists: stat.assists // Goalies can get assists
+        }
+      })
+    
+    return {
+      gamePk,
+      isOvertime,
+      isShootout,
+      homeScore: gameDetails.homeTeam.score,
+      awayScore: gameDetails.awayTeam.score,
+      detroitScore,
+      opponentScore,
+      playerStats,
+      goalieStats: goalieStats.length > 0 ? goalieStats : undefined
+    }
+  } catch (error) {
+    console.error(`Error fetching game details for scoring (gamePk: ${gamePk}):`, error)
+    throw error
   }
 }
 

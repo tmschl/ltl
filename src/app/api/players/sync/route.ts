@@ -39,19 +39,26 @@ async function syncPlayers(request: NextRequest) {
                        rosterPlayer.position === 'Goalie' ? 'Goalie' : 'Forward'
 
       const playerData = {
+        nhlPlayerId: rosterPlayer.id, // NHL API player ID
         name: fullName,
         number: rosterPlayer.sweaterNumber || null,
         position: position,
         isActive: true
       }
 
-      // Try to find existing player by name and number
-      const existingPlayer = await prisma.player.findFirst({
-        where: {
-          name: fullName,
-          number: playerData.number
-        }
+      // Try to find existing player by NHL ID first, then by name and number
+      let existingPlayer = await prisma.player.findUnique({
+        where: { nhlPlayerId: rosterPlayer.id }
       })
+
+      if (!existingPlayer) {
+        existingPlayer = await prisma.player.findFirst({
+          where: {
+            name: fullName,
+            number: playerData.number
+          }
+        })
+      }
 
       if (existingPlayer) {
         // Update existing player

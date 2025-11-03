@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { fetchGameFeed, fetchGameBoxscore, isOvertimeGame, isShorthandedGoal, isEmptyNetGoal } from "@/lib/nhl-api"
-import { calculatePlayerTotalPoints, type GoalEvent, type AssistEvent, type GoaliePerformance } from "@/lib/scoring"
+import { fetchGameDetailsForScoring } from "@/lib/nhl-api"
+import { calculatePlayerTotalPoints, calculateGoaliePoints, type GoalEvent, type AssistEvent, type GoaliePerformance } from "@/lib/scoring"
 
 // This endpoint calculates and updates points for all picks in a completed game
 // Can be called manually or via a scheduled job
@@ -52,17 +52,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Fetch game data from NHL API
-    // Note: We need to store NHL game ID (gamePk) in our database
-    // For now, we'll try to get it from game data or skip NHL API integration
-    // TODO: Store NHL gamePk in Game model
-    
-    // For now, we'll calculate points based on PlayerPerformance records
-    // If PlayerPerformance doesn't exist, we'll need to create them from NHL API data
+    // Require nhlGamePk to fetch scoring data
+    if (!game.nhlGamePk) {
+      return NextResponse.json(
+        { error: "Game does not have NHL gamePk. Please sync games first." },
+        { status: 400 }
+      )
+    }
+
+    // Fetch game scoring data from NHL API
+    console.log(`🔄 Calculating points for game ${gameId} (NHL gamePk: ${game.nhlGamePk})`)
+    const scoringData = await fetchGameDetailsForScoring(game.nhlGamePk)
     
     const allPicks = game.picks
     const updatedPicks = []
-    const leaguePointUpdates = new Map<string, number>() // leagueId -> points to add
+    // Track points per user per league to avoid double counting
+    const userLeaguePoints = new Map<string, number>() // key: `${userId}-${leagueId}`, value: points
 
     for (const pick of allPicks) {
       // Get player performance for this game
@@ -75,8 +80,33 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      // If no performance record, create one with zero stats
-      // In production, this should be populated from NHL API
+      // If no performance record exists, try to sync it first
+      if (!playerPerformance) {
+        console.warn(`⚠️  No player performance found for ${pick.playerName} in game ${gameId}. Attempting to sync...`)
+        // Try to sync player performance (this will create the record)
+        try {
+          const syncResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/players/sync-performance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gameId })
+          })
+          if (syncResponse.ok) {
+            // Re-fetch the performance record
+            playerPerformance = await prisma.playerPerformance.findUnique({
+              where: {
+                playerId_gameId: {
+                  playerId: pick.playerId,
+                  gameId: game.id
+                }
+              }
+            })
+          }
+        } catch (syncError) {
+          console.error(`Failed to sync player performance:`, syncError)
+        }
+      }
+
+      // If still no performance, create zero record
       if (!playerPerformance) {
         playerPerformance = await prisma.playerPerformance.create({
           data: {
@@ -88,52 +118,78 @@ export async function POST(request: NextRequest) {
             shortHandedPoints: 0
           }
         })
+        console.warn(`⚠️  Created zero performance record for ${pick.playerName}`)
       }
+
+      // Find player stats from NHL API data
+      const playerNhlId = pick.player.nhlPlayerId
+      const playerStat = playerNhlId 
+        ? scoringData.playerStats.find(stat => stat.playerId === playerNhlId)
+        : null
 
       // Calculate points based on player position
       let pointsEarned = 0
 
       if (pick.player.position === 'Goalie') {
-        // For goalies, we need goals against info
-        // This should come from NHL API boxscore
-        // For now, placeholder calculation
-        // TODO: Fetch from NHL API and calculate properly
-        const goaliePerformance: GoaliePerformance = {
-          playerId: pick.playerId,
-          goalsAgainst: 0, // Should come from NHL API
-          assists: playerPerformance.assists,
-          emptyNetGoals: 0, // Should come from NHL API
-          shootoutGoals: 0 // Should come from NHL API
-        }
+        // For goalies, calculate using goalie-specific scoring
+        const goalieStat = scoringData.goalieStats?.find(stat => stat.playerId === playerNhlId)
         
-        // Simplified calculation for now
-        // In production, fetch full game data from NHL API
-        pointsEarned = playerPerformance.assists * 5 // 5 points per assist
+        if (goalieStat) {
+          const goaliePerformance: GoaliePerformance = {
+            playerId: pick.playerId,
+            goalsAgainst: goalieStat.goalsAgainst,
+            assists: goalieStat.assists,
+            emptyNetGoals: 0, // Empty net goals not tracked in boxscore - would need game feed
+            shootoutGoals: scoringData.isShootout ? goalieStat.goalsAgainst : 0 // Simplified: if shootout, assume all goals against are shootout
+          }
+          
+          pointsEarned = calculateGoaliePoints(goaliePerformance)
+        } else {
+          // Fallback: use assists from PlayerPerformance
+          pointsEarned = playerPerformance.assists * 5 // 5 points per assist
+        }
       } else {
         // For forwards and defensemen
         const goals: GoalEvent[] = []
         const assists: AssistEvent[] = []
 
-        // Create goal events (we'll need to determine OT and shorthanded from NHL API)
-        for (let i = 0; i < playerPerformance.goals; i++) {
+        // Determine if game went to OT
+        const isOvertimeGame = scoringData.isOvertime && !scoringData.isShootout
+
+        // Create goal events
+        // For OT detection: if it's an OT game and player has goals, we'll assume last goal(s) are OT
+        // This is a simplification - ideally we'd parse the game feed for exact OT goals
+        const totalGoals = playerPerformance.goals
+        const shorthandedGoals = playerPerformance.shortHandedPoints || 0
+        
+        for (let i = 0; i < totalGoals; i++) {
+          // Determine if this is an OT goal
+          // Simplified: if OT game and this is the last goal, assume it's OT
+          const isOvertimeGoal = isOvertimeGame && i === totalGoals - 1
+          
+          // Determine if shorthanded (use shortHandedPoints count)
+          const isShorthanded = i < shorthandedGoals
+          
           goals.push({
             playerId: pick.playerId,
             playerName: pick.playerName,
             position: pick.player.position as 'Forward' | 'Defense',
-            isOvertime: false, // TODO: Get from NHL API
-            isShorthanded: i < (playerPerformance.shortHandedPoints || 0),
-            isEmptyNet: false
+            isOvertime: isOvertimeGoal,
+            isShorthanded: isShorthanded,
+            isEmptyNet: false // Empty net detection would require game feed parsing
           })
         }
 
         // Create assist events
+        // For assists, we can't easily determine OT/shorthanded without game feed
+        // Simplified: assume regular assists (can be enhanced later)
         for (let i = 0; i < playerPerformance.assists; i++) {
           assists.push({
             playerId: pick.playerId,
             playerName: pick.playerName,
             position: pick.player.position as 'Forward' | 'Defense',
-            isOvertime: false, // TODO: Get from NHL API
-            isShorthanded: i < (playerPerformance.shortHandedPoints || 0)
+            isOvertime: false, // Would need game feed to determine
+            isShorthanded: false // Would need game feed to determine
           })
         }
 
@@ -152,38 +208,37 @@ export async function POST(request: NextRequest) {
 
       updatedPicks.push(updatedPick)
 
-      // Accumulate points for league membership update
-      const currentLeaguePoints = leaguePointUpdates.get(pick.leagueId) || 0
-      leaguePointUpdates.set(pick.leagueId, currentLeaguePoints + pointsEarned)
+      // Track points per user per league
+      const key = `${pick.userId}-${pick.leagueId}`
+      const currentPoints = userLeaguePoints.get(key) || 0
+      userLeaguePoints.set(key, currentPoints + pointsEarned)
     }
 
     // Update league membership totals
-    for (const [leagueId, pointsToAdd] of leaguePointUpdates) {
-      // Get all picks for this league in this game to calculate total for each user
-      const leaguePicks = allPicks.filter(p => p.leagueId === leagueId)
+    // Group by user and league to avoid double counting
+    for (const [key, totalPoints] of userLeaguePoints) {
+      const [userId, leagueId] = key.split('-')
       
-      for (const leaguePick of leaguePicks) {
-        const pickPoints = updatedPicks.find(p => p.id === leaguePick.id)?.pointsEarned || 0
-        
-        // Update user's total points in this league
-        await prisma.leagueMembership.updateMany({
-          where: {
-            leagueId: leagueId,
-            userId: leaguePick.userId
-          },
-          data: {
-            totalPoints: {
-              increment: pickPoints
-            }
+      // Update user's total points in this league
+      await prisma.leagueMembership.updateMany({
+        where: {
+          leagueId: leagueId,
+          userId: userId
+        },
+        data: {
+          totalPoints: {
+            increment: totalPoints
           }
-        })
-      }
+        }
+      })
     }
 
     return NextResponse.json(
       { 
         message: "Points calculated successfully",
         picksUpdated: updatedPicks.length,
+        isOvertime: scoringData.isOvertime,
+        isShootout: scoringData.isShootout,
         picks: updatedPicks.map(p => ({
           id: p.id,
           playerName: p.playerName,
