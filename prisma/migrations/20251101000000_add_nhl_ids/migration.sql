@@ -16,3 +16,4 @@ CREATE INDEX "Game_nhlGamePk_idx" ON "Game"("nhlGamePk");
 -- CreateIndex
 CREATE INDEX "Player_nhlPlayerId_idx" ON "Player"("nhlPlayerId");
 
+
