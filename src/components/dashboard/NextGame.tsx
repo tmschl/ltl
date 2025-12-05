@@ -2,7 +2,6 @@
 
 import { CalendarIcon, MapPinIcon, LockIcon, ClockIcon, CheckIcon } from "lucide-react"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
 interface NextGame {
@@ -14,9 +13,10 @@ interface NextGame {
   isLocked: boolean
   lockTime: string
   userPick?: {
-    playerId: string
+    playerId: string | null
     playerName: string
     playerNumber: number | null
+    pickType: string
   }
 }
 
@@ -27,7 +27,6 @@ interface NextGameProps {
 }
 
 export function NextGame({ game, leagueId, onPickUpdate }: NextGameProps) {
-  const router = useRouter()
   const [timeRemaining, setTimeRemaining] = useState<string>("")
   const [hasPicked, setHasPicked] = useState(!!game?.userPick)
 
@@ -92,10 +91,6 @@ export function NextGame({ game, leagueId, onPickUpdate }: NextGameProps) {
     hour: "numeric",
     minute: "2-digit",
   })
-
-  const handleMakePick = () => {
-    router.push(`/game/${game.id}?leagueId=${leagueId}`)
-  }
 
   const isPickable = !game.isLocked && game.status === "scheduled"
 
@@ -167,8 +162,9 @@ export function NextGame({ game, leagueId, onPickUpdate }: NextGameProps) {
               <div>
                 <p className="text-sm text-gray-400 mb-1">Your Pick</p>
                 <p className="text-xl font-bold text-white">
-                  {game.userPick.playerName}
-                  {game.userPick.playerNumber && ` #${game.userPick.playerNumber}`}
+                  {game.userPick.pickType === "team" 
+                    ? game.userPick.playerName
+                    : `${game.userPick.playerName}${game.userPick.playerNumber ? ` #${game.userPick.playerNumber}` : ""}`}
                 </p>
               </div>
               <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-500/20 text-green-300 border border-green-500/50">
@@ -187,32 +183,6 @@ export function NextGame({ game, leagueId, onPickUpdate }: NextGameProps) {
             </div>
           </div>
         )}
-
-        {/* Action Buttons */}
-        <div className="flex space-x-4">
-          {isPickable && !hasPicked && (
-            <button
-              onClick={handleMakePick}
-              className="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 rounded-xl font-medium transition-all shadow-lg shadow-red-500/30"
-            >
-              Make Your Pick
-            </button>
-          )}
-          {isPickable && hasPicked && (
-            <button
-              onClick={handleMakePick}
-              className="flex-1 bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-xl font-medium transition-all border border-white/20"
-            >
-              View/Edit Pick
-            </button>
-          )}
-          <button
-            onClick={() => router.push(`/game/${game.id}?leagueId=${leagueId}`)}
-            className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-xl font-medium transition-all border border-white/20"
-          >
-            View Game
-          </button>
-        </div>
       </div>
     </div>
   )

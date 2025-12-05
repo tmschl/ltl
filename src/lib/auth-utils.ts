@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken"
+import { NextRequest } from "next/server"
 import { prisma } from "./prisma"
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || "your-secret-key"
@@ -36,9 +37,9 @@ export function createToken(user: User): string {
   )
 }
 
-export async function getAuthenticatedUser(request: Request): Promise<User | null> {
+export async function getAuthenticatedUser(request: NextRequest): Promise<User | null> {
   try {
-    const token = request.headers.get("cookie")?.split("auth-token=")[1]?.split(";")[0]
+    const token = request.cookies.get("auth-token")?.value
     
     if (!token) {
       return null

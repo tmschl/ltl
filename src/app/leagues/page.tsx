@@ -77,22 +77,7 @@ export default function LeaguesPage() {
                 My Leagues
               </h1>
             </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => router.push("/league/join")}
-                className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all border border-white/20"
-              >
-                <UserPlusIcon className="h-5 w-5 inline mr-2" />
-                Join
-              </button>
-              <button
-                onClick={() => router.push("/league/create")}
-                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all shadow-lg shadow-red-500/30"
-              >
-                <PlusIcon className="h-5 w-5 inline mr-2" />
-                Create
-              </button>
-            </div>
+            {/* Buttons removed for simplified workflow */}
           </div>
         </header>
 
@@ -101,21 +86,7 @@ export default function LeaguesPage() {
           <div className="backdrop-blur-xl bg-white/5 p-12 rounded-3xl border border-white/10 shadow-2xl text-center">
             <TrophyIcon className="mx-auto h-20 w-20 text-gray-400 mb-4" />
             <h3 className="text-2xl font-bold text-white mb-2">No leagues yet</h3>
-            <p className="text-gray-400 mb-6">Create a new league or join one with a code!</p>
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={() => router.push("/league/create")}
-                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 rounded-xl font-medium transition-all shadow-lg shadow-red-500/30"
-              >
-                Create League
-              </button>
-              <button
-                onClick={() => router.push("/league/join")}
-                className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-xl font-medium transition-all border border-white/20"
-              >
-                Join League
-              </button>
-            </div>
+            <p className="text-gray-400 mb-6">You are not currently in a league. Please contact an administrator.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

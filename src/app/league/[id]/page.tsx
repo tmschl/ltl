@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Image from "next/image"
-import { TrophyIcon, CopyIcon, CheckIcon } from "lucide-react"
+import { TrophyIcon, CopyIcon, CheckIcon, ArrowUpIcon, ArrowDownIcon } from "lucide-react"
 
 interface Member {
   id: string
@@ -48,6 +48,9 @@ export default function LeagueDetailPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [draftOrder, setDraftOrder] = useState<Array<{ position: number; userId: string; displayName: string }>>([])
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [savingDraftOrder, setSavingDraftOrder] = useState(false)
   const router = useRouter()
   const params = useParams()
 
@@ -76,10 +79,18 @@ export default function LeagueDetailPage() {
         setLeague(data.league)
         setMembers(data.members)
         setUserMembership(data.userMembership)
+        setIsAdmin(data.userMembership?.role === "admin")
       } else if (response.status === 403 || response.status === 404) {
         const data = await response.json()
         alert(data.error)
         router.push("/leagues")
+      }
+
+      // Fetch draft order
+      const draftOrderResponse = await fetch(`/api/league/${params?.id}/draft-order`)
+      if (draftOrderResponse.ok) {
+        const draftData = await draftOrderResponse.json()
+        setDraftOrder(draftData.draftOrder || [])
       }
     } catch (error) {
       console.error("Error fetching league:", error)
@@ -101,6 +112,61 @@ export default function LeagueDetailPage() {
     if (rank === 2) return 'bg-gray-400/20 text-gray-300 border-2 border-gray-400/50'
     if (rank === 3) return 'bg-orange-600/20 text-orange-300 border-2 border-orange-600/50'
     return 'bg-white/10 text-gray-300'
+  }
+
+  const moveDraftPosition = (index: number, direction: 'up' | 'down') => {
+    if (!isAdmin) return
+    
+    const newOrder = [...draftOrder]
+    if (direction === 'up' && index > 0) {
+      [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
+      newOrder[index - 1].position = index
+      newOrder[index].position = index + 1
+    } else if (direction === 'down' && index < newOrder.length - 1) {
+      [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
+      newOrder[index].position = index + 1
+      newOrder[index + 1].position = index + 2
+    }
+    setDraftOrder(newOrder)
+  }
+
+  const saveDraftOrder = async () => {
+    if (!isAdmin || !params?.id) return
+    
+    setSavingDraftOrder(true)
+    try {
+      const userIds = draftOrder.map(m => m.userId)
+      const response = await fetch(`/api/league/${params.id}/draft-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds })
+      })
+      
+      if (response.ok) {
+        alert('Draft order saved successfully!')
+        fetchLeagueData()
+      } else {
+        const data = await response.json()
+        alert(data.error || 'Failed to save draft order')
+      }
+    } catch (error) {
+      console.error('Error saving draft order:', error)
+      alert('Failed to save draft order')
+    } finally {
+      setSavingDraftOrder(false)
+    }
+  }
+
+  const initializeDraftOrder = () => {
+    if (!isAdmin) return
+    
+    // Initialize draft order from members (by join order or current order)
+    const newOrder = members.map((member, index) => ({
+      position: index + 1,
+      userId: member.userId,
+      displayName: member.displayName
+    }))
+    setDraftOrder(newOrder)
   }
 
   if (loading) {
@@ -187,6 +253,74 @@ export default function LeagueDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Draft Order Management (Admin Only) */}
+        {isAdmin && (
+          <div className="backdrop-blur-xl bg-white/5 p-6 rounded-3xl border border-white/10 shadow-2xl mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-white">Draft Order</h2>
+              {draftOrder.length === 0 && (
+                <button
+                  onClick={initializeDraftOrder}
+                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all border border-white/20"
+                >
+                  Initialize Draft Order
+                </button>
+              )}
+            </div>
+            
+            {draftOrder.length > 0 ? (
+              <div className="space-y-3">
+                {draftOrder.map((member, index) => (
+                  <div
+                    key={member.userId}
+                    className="backdrop-blur-xl p-4 rounded-2xl border bg-white/5 border-white/10 flex items-center justify-between"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full font-bold bg-red-500/20 text-red-200 border border-red-500/30">
+                        {member.position}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white">{member.displayName}</p>
+                        <p className="text-xs text-gray-400">Pick #{member.position}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => moveDraftPosition(index, 'up')}
+                        disabled={index === 0}
+                        className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        title="Move up"
+                      >
+                        <ArrowUpIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => moveDraftPosition(index, 'down')}
+                        disabled={index === draftOrder.length - 1}
+                        className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        title="Move down"
+                      >
+                        <ArrowDownIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={saveDraftOrder}
+                  disabled={savingDraftOrder}
+                  className="w-full mt-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 rounded-xl font-medium transition-all shadow-lg shadow-red-500/30 disabled:opacity-50"
+                >
+                  {savingDraftOrder ? "Saving..." : "Save Draft Order"}
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-400 mb-4">Draft order has not been set yet.</p>
+                <p className="text-sm text-gray-500">Click "Initialize Draft Order" to set the initial order.</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Leaderboard */}
         <div className="backdrop-blur-xl bg-white/5 p-6 rounded-3xl border border-white/10 shadow-2xl mb-8">

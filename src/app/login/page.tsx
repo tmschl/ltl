@@ -59,6 +59,7 @@ export default function LoginPage() {
         })
 
         if (response.ok) {
+          // Always redirect to dashboard after successful login
           router.push("/dashboard")
         } else {
           const data = await response.json()

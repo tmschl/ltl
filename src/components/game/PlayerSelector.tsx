@@ -14,14 +14,18 @@ interface Player {
 interface PlayerSelectorProps {
   players: Player[]
   selectedPlayerId: string | null
+  selectedPickType?: string | null
   onSelectPlayer: (player: Player) => void
+  onSelectTeam?: () => void
   disabled?: boolean
 }
 
 export function PlayerSelector({
   players,
   selectedPlayerId,
+  selectedPickType,
   onSelectPlayer,
+  onSelectTeam,
   disabled = false
 }: PlayerSelectorProps) {
   const [searchTerm, setSearchTerm] = useState("")
@@ -110,6 +114,38 @@ export function PlayerSelector({
         </div>
       </div>
 
+      {/* Team Pick Option */}
+      {onSelectTeam && (
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-gray-400 mb-3 uppercase">
+            Team Pick
+          </h3>
+          <button
+            onClick={() => !disabled && onSelectTeam()}
+            disabled={disabled}
+            className={`w-full p-4 rounded-xl border text-left transition-all ${
+              selectedPickType === "team"
+                ? "bg-red-500/20 border-red-500/50 shadow-lg shadow-red-500/20"
+                : "bg-white/5 border-white/10 hover:bg-white/10 hover:border-red-500/30"
+            } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-white">Detroit Red Wings (Team)</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Pick the team to win. Score 4+ goals and win = 4 points + 1 per goal after 4
+                </p>
+              </div>
+              {selectedPickType === "team" && (
+                <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">✓</span>
+                </div>
+              )}
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Players by Position */}
       <div className="space-y-6 max-h-96 overflow-y-auto">
         {Object.entries(playersByPosition).map(([position, positionPlayers]) => {
@@ -122,7 +158,7 @@ export function PlayerSelector({
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {positionPlayers.map((player) => {
-                  const isSelected = selectedPlayerId === player.id
+                  const isSelected = selectedPlayerId === player.id && selectedPickType !== "team"
 
                   return (
                     <button

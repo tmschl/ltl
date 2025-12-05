@@ -12,6 +12,7 @@ export default function Home() {
       try {
         const response = await fetch("/api/auth/me")
         if (response.ok) {
+          // Always redirect to dashboard - all pick functionality is there now
           router.push("/dashboard")
         } else {
           router.push("/login")

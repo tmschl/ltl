@@ -49,14 +49,15 @@ model League {
 }
 
 model LeagueMembership {
-  id          String   @id @default(cuid())
-  leagueId    String
-  userId      String
-  role        String   @default("member") // admin or member
-  totalPoints Int      @default(0)
-  joinedAt    DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  leagueId     String
+  userId       String
+  role         String   @default("member") // admin or member
+  totalPoints  Int      @default(0)
+  draftPosition Int?    // Position in draft order (1 = first pick, 2 = second, etc.)
+  joinedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
   league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
@@ -114,8 +115,9 @@ model Pick {
   userId       String
   leagueId     String
   gameId       String
-  playerId     String
+  playerId     String?   // Optional for team picks
   playerName   String
+  pickType     String    @default("player") // "player" or "team"
   pointsEarned Int       @default(0)
   pickedAt     DateTime  @default(now())
   lockedAt     DateTime?
@@ -126,7 +128,7 @@ model Pick {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  player Player @relation(fields: [playerId], references: [id])
+  player Player? @relation(fields: [playerId], references: [id])
 
   @@unique([userId, leagueId, gameId])
   @@index([leagueId, gameId])
