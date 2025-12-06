@@ -12,6 +12,7 @@ interface NextGameProps {
     time: string
     venue: string
     isHome: boolean
+    status?: 'upcoming' | 'completed'
   }
 }
 

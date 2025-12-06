@@ -1,0 +1,48 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  picks Pick[]
+  score UserScore?
+}
+
+model Pick {
+  id            String   @id @default(cuid())
+  userId        String
+  gameId        String // External game ID from sports API
+  playerId      String // Can be player ID or 'team'
+  playerPosition String? // Optional position if player
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId]) // One pick per user per game
+  @@index([userId])
+  @@index([gameId])
+}
+
+model UserScore {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  totalSeasonPoints Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

@@ -1,24 +1,9 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { UserIcon, LockIcon, CheckCircleIcon, ClockIcon } from 'lucide-react'
-
-interface Player {
-  id: string
-  name: string
-  number: string
-  position: string
-  goals?: number
-  assists?: number
-  points?: number
-}
-
-interface User {
-  id: string
-  name: string
-  pick: string | null
-  points: number
-}
+import { useGame } from '@/contexts/GameContext'
+import type { Player } from '@/lib/types'
 
 interface PickOrderProps {
   currentUserId: string
@@ -27,179 +12,85 @@ interface PickOrderProps {
 
 export function PickOrder({ currentUserId, roster }: PickOrderProps) {
   const [activeTab, setActiveTab] = useState<'picks' | 'roster'>('picks')
+  const {
+    currentGame,
+    currentPicks,
+    users,
+    userScores,
+    makePick,
+    getUserScoreForGame,
+    getTotalScoreForUser,
+  } = useGame()
 
-  // Mock users in pick order with season points
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      name: 'Sarah Johnson',
-      pick: '1',
-      points: 245,
-    },
-    {
-      id: '2',
-      name: 'Mike Williams',
-      pick: '2',
-      points: 232,
-    },
-    {
-      id: currentUserId,
-      name: 'You',
-      pick: null,
-      points: 218,
-    },
-    {
-      id: '4',
-      name: 'Emily Davis',
-      pick: null,
-      points: 205,
-    },
-    {
-      id: '5',
-      name: 'John Smith',
-      pick: null,
-      points: 198,
-    },
-    {
-      id: '6',
-      name: 'Alex Thompson',
-      pick: null,
-      points: 187,
-    },
-    {
-      id: '7',
-      name: 'Rachel Green',
-      pick: null,
-      points: 175,
-    },
-    {
-      id: '8',
-      name: 'Tom Brady',
-      pick: null,
-      points: 162,
-    },
-  ])
+  const isGameCompleted = currentGame?.status === 'completed'
 
-  const handlePickChange = (userId: string, playerId: string) => {
-    setUsers(
-      users.map((user) =>
-        user.id === userId
-          ? {
-              ...user,
-              pick: playerId,
-            }
-          : user,
-      ),
-    )
+  // Get pick for each user
+  const usersWithPicks = useMemo(() => {
+    return users.map((user) => {
+      const pick = currentPicks.find((p) => p.userId === user.id && p.gameId === currentGame?.id)
+      const totalScore = getTotalScoreForUser(user.id)
+      
+      // Get game points if game is completed
+      const gamePoints = isGameCompleted && currentGame 
+        ? getUserScoreForGame(user.id, currentGame.id)
+        : 0
+
+      return {
+        ...user,
+        pick: pick?.playerId || null,
+        pickType: pick?.playerId === 'team' ? 'team' : 'player',
+        totalScore,
+        gamePoints,
+      }
+    })
+  }, [users, currentPicks, currentGame, isGameCompleted, getTotalScoreForUser, getUserScoreForGame])
+
+  const handlePickChange = (userId: string, value: string) => {
+    if (!currentGame || isGameCompleted) return
+
+    if (value === 'team') {
+      makePick(userId, 'team')
+    } else {
+      const player = roster.find((p) => p.id === value)
+      if (player) {
+        makePick(userId, value, player.position)
+      }
+    }
   }
 
   // Find the first user without a pick
-  const currentPickerIndex = users.findIndex((user) => user.pick === null)
-  const currentPicker = users[currentPickerIndex]
+  const currentPickerIndex = usersWithPicks.findIndex((user) => !user.pick)
+  const currentPicker = usersWithPicks[currentPickerIndex]
 
-  // Get already picked player IDs
-  const pickedPlayerIds = users
-    .filter((user) => user.pick !== null)
-    .map((user) => user.pick)
+  // Get already picked player IDs (exclude 'team')
+  const pickedPlayerIds = usersWithPicks
+    .filter((user) => user.pick && user.pick !== 'team')
+    .map((user) => user.pick) as string[]
 
   // Filter available roster
   const availableRoster = roster.filter(
     (player) => !pickedPlayerIds.includes(player.id),
   )
 
-  // Enhanced roster with stats
-  const rosterWithStats: Player[] = [
-    {
-      id: '1',
-      name: 'Dylan Larkin',
-      number: '71',
-      position: 'C',
-      goals: 28,
-      assists: 35,
-      points: 63,
-    },
-    {
-      id: '2',
-      name: 'Lucas Raymond',
-      number: '23',
-      position: 'LW',
-      goals: 24,
-      assists: 38,
-      points: 62,
-    },
-    {
-      id: '3',
-      name: 'Alex DeBrincat',
-      number: '93',
-      position: 'RW',
-      goals: 32,
-      assists: 28,
-      points: 60,
-    },
-    {
-      id: '4',
-      name: 'Moritz Seider',
-      number: '53',
-      position: 'D',
-      goals: 8,
-      assists: 34,
-      points: 42,
-    },
-    {
-      id: '5',
-      name: 'Patrick Kane',
-      number: '88',
-      position: 'RW',
-      goals: 18,
-      assists: 32,
-      points: 50,
-    },
-    {
-      id: '6',
-      name: 'J.T. Compher',
-      number: '18',
-      position: 'C',
-      goals: 15,
-      assists: 22,
-      points: 37,
-    },
-    {
-      id: '7',
-      name: 'Ben Chiarot',
-      number: '8',
-      position: 'D',
-      goals: 4,
-      assists: 18,
-      points: 22,
-    },
-    {
-      id: '8',
-      name: 'Ville Husso',
-      number: '35',
-      position: 'G',
-      goals: 0,
-      assists: 1,
-      points: 1,
-    },
-    {
-      id: '9',
-      name: 'Andrew Copp',
-      number: '82',
-      position: 'C',
-      goals: 12,
-      assists: 19,
-      points: 31,
-    },
-    {
-      id: '10',
-      name: 'David Perron',
-      number: '57',
-      position: 'RW',
-      goals: 16,
-      assists: 24,
-      points: 40,
-    },
-  ]
+  // Stats lookup by player ID (season stats for display)
+  const statsMap: Record<string, { goals: number; assists: number; points: number }> = {
+    '1': { goals: 28, assists: 35, points: 63 },
+    '2': { goals: 24, assists: 38, points: 62 },
+    '3': { goals: 32, assists: 28, points: 60 },
+    '4': { goals: 8, assists: 34, points: 42 },
+    '5': { goals: 18, assists: 32, points: 50 },
+    '6': { goals: 15, assists: 22, points: 37 },
+    '7': { goals: 4, assists: 18, points: 22 },
+    '8': { goals: 0, assists: 1, points: 1 },
+    '9': { goals: 12, assists: 19, points: 31 },
+    '10': { goals: 16, assists: 24, points: 40 },
+  }
+
+  // Enhanced roster with stats - merge roster prop with stats
+  const rosterWithStats: (Player & { goals: number; assists: number; points: number })[] = roster.map((player) => ({
+    ...player,
+    ...(statsMap[player.id] || { goals: 0, assists: 0, points: 0 }),
+  }))
 
   return (
     <div className="backdrop-blur-xl bg-white/5 p-8 rounded-3xl border border-white/10 shadow-2xl">
@@ -240,22 +131,22 @@ export function PickOrder({ currentUserId, roster }: PickOrderProps) {
 
       {activeTab === 'picks' ? (
         <div className="space-y-3">
-          {users.map((user, index) => {
-            const selectedPlayer = roster.find((p) => p.id === user.pick)
+          {usersWithPicks.map((user, index) => {
+            const selectedPlayer = user.pick && user.pick !== 'team' 
+              ? roster.find((p) => p.id === user.pick) 
+              : null
 
             const isCurrentPicker = index === currentPickerIndex
-
-            const canPick = isCurrentPicker && user.id === currentUserId
-
+            const canPick = isCurrentPicker && !isGameCompleted
             const isWaiting = index > currentPickerIndex
 
             return (
               <div
                 key={user.id}
                 className={`backdrop-blur-xl p-5 rounded-2xl border transition-all ${
-                  isCurrentPicker
+                  isCurrentPicker && !isGameCompleted
                     ? 'bg-red-500/20 border-red-500/50 shadow-lg shadow-red-500/20'
-                    : isWaiting
+                    : isWaiting && !isGameCompleted
                     ? 'bg-white/5 border-white/10 opacity-60'
                     : 'bg-white/5 border-white/10'
                 }`}
@@ -264,25 +155,30 @@ export function PickOrder({ currentUserId, roster }: PickOrderProps) {
                   <div className="flex items-center space-x-4 flex-1">
                     <div className="flex flex-col items-center justify-center min-w-[3rem]">
                       <div className="text-2xl font-bold text-white">
-                        {user.points}
+                        {user.totalScore}
                       </div>
                       <div className="text-xs text-gray-400 uppercase tracking-wide">
                         pts
                       </div>
+                      {isGameCompleted && user.gamePoints > 0 && (
+                        <div className="text-xs text-green-400 font-medium mt-1">
+                          +{user.gamePoints}
+                        </div>
+                      )}
                     </div>
 
                     <div
                       className={`h-12 w-12 rounded-full flex items-center justify-center border-2 ${
                         user.pick
                           ? 'bg-green-500/20 border-green-500/50'
-                          : isCurrentPicker
+                          : isCurrentPicker && !isGameCompleted
                           ? 'bg-red-500/20 border-red-500/50'
                           : 'bg-white/10 border-white/20'
                       }`}
                     >
                       {user.pick ? (
                         <CheckCircleIcon className="h-6 w-6 text-green-400" />
-                      ) : isWaiting ? (
+                      ) : isWaiting && !isGameCompleted ? (
                         <LockIcon className="h-6 w-6 text-gray-500" />
                       ) : (
                         <UserIcon className="h-6 w-6 text-gray-400" />
@@ -302,16 +198,23 @@ export function PickOrder({ currentUserId, roster }: PickOrderProps) {
                           </span>
                         )}
                       </p>
-                      {selectedPlayer ? (
+                      {user.pick === 'team' ? (
+                        <p className="text-sm text-green-400 font-medium mt-1">
+                          The Team
+                          <span className="ml-2 text-xs bg-blue-500/30 px-2 py-0.5 rounded-full">
+                            Team
+                          </span>
+                        </p>
+                      ) : selectedPlayer ? (
                         <p className="text-sm text-green-400 font-medium mt-1">
                           #{selectedPlayer.number} {selectedPlayer.name} (
                           {selectedPlayer.position})
                         </p>
-                      ) : isWaiting ? (
+                      ) : isWaiting && !isGameCompleted ? (
                         <p className="text-sm text-gray-500 mt-1">
                           Waiting for turn...
                         </p>
-                      ) : isCurrentPicker ? (
+                      ) : isCurrentPicker && !isGameCompleted ? (
                         <p className="text-sm text-red-300 mt-1">
                           {user.id === currentUserId
                             ? 'Make your pick'
@@ -326,10 +229,14 @@ export function PickOrder({ currentUserId, roster }: PickOrderProps) {
                       <select
                         value={user.pick || ''}
                         onChange={(e) => handlePickChange(user.id, e.target.value)}
-                        className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 transition-all"
+                        disabled={isGameCompleted}
+                        className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-red-500/50 focus:ring-2 focus:ring-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="" className="bg-gray-900">
                           Select player...
+                        </option>
+                        <option value="team" className="bg-gray-900">
+                          The Team
                         </option>
                         {availableRoster.map((player) => (
                           <option
@@ -351,12 +258,12 @@ export function PickOrder({ currentUserId, roster }: PickOrderProps) {
       ) : (
         <div className="space-y-2">
           {/* Header Row */}
-          <div className="grid grid-cols-[1fr,80px,80px,80px,100px] gap-4 px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-white/10">
-            <div>Player</div>
-            <div className="text-center">G</div>
-            <div className="text-center">A</div>
-            <div className="text-center">PTS</div>
-            <div className="text-center">Odds</div>
+          <div className="flex gap-4 px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-white/10">
+            <div className="flex-1">Player</div>
+            <div className="w-20 text-center">G</div>
+            <div className="w-20 text-center">A</div>
+            <div className="w-20 text-center">PTS</div>
+            <div className="w-24 text-center">Odds</div>
           </div>
 
           {/* Player Rows */}
@@ -367,28 +274,28 @@ export function PickOrder({ currentUserId, roster }: PickOrderProps) {
                 key={player.id}
                 className="backdrop-blur-xl bg-white/5 p-5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all"
               >
-                <div className="grid grid-cols-[1fr,80px,80px,80px,100px] gap-4 items-center">
-                  <div className="flex items-center space-x-3">
-                    <div className="h-10 w-10 rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/30">
+                <div className="flex gap-4 items-center">
+                  <div className="flex-1 flex items-center space-x-3 min-w-0">
+                    <div className="h-10 w-10 rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/30 flex-shrink-0">
                       <span className="text-red-200 font-bold text-sm">
                         {player.number}
                       </span>
                     </div>
-                    <div>
-                      <p className="text-white font-semibold">{player.name}</p>
+                    <div className="min-w-0">
+                      <p className="text-white font-semibold truncate">{player.name}</p>
                       <p className="text-gray-400 text-sm">{player.position}</p>
                     </div>
                   </div>
-                  <div className="text-center text-white font-semibold">
-                    {player.goals}
+                  <div className="w-20 text-center text-white font-semibold">
+                    {player.goals ?? 0}
                   </div>
-                  <div className="text-center text-white font-semibold">
-                    {player.assists}
+                  <div className="w-20 text-center text-white font-semibold">
+                    {player.assists ?? 0}
                   </div>
-                  <div className="text-center text-red-300 font-bold text-lg">
-                    {player.points}
+                  <div className="w-20 text-center text-red-300 font-bold text-lg">
+                    {player.points ?? 0}
                   </div>
-                  <div className="text-center">
+                  <div className="w-24 text-center">
                     <span
                       className={`text-sm font-semibold ${
                         Math.random() > 0.5 ? 'text-green-400' : 'text-red-400'
