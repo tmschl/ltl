@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function Login() {
@@ -128,7 +129,7 @@ export default function Login() {
               {isLoading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}
             </button>
 
-            <div className="text-center">
+            <div className="text-center space-y-2">
               <button
                 type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
@@ -138,6 +139,16 @@ export default function Login() {
                   ? 'Already have an account? Sign in'
                   : "Don't have an account? Sign up"}
               </button>
+              {!isSignUp && (
+                <div>
+                  <Link
+                    href="/reset-password"
+                    className="text-sm text-gray-400 hover:text-red-300 transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+              )}
             </div>
           </form>
         </div>
