@@ -225,7 +225,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-red-950 py-8">
       <div className="container mx-auto px-4 max-w-4xl">
-        {displayGame && <NextGame game={nextGameProps} />}
+        {displayGame && nextGameProps && <NextGame game={nextGameProps} />}
 
         {/* Game Controls */}
         <div className="backdrop-blur-xl bg-white/5 p-6 rounded-3xl border border-white/10 shadow-2xl mb-8">
@@ -297,7 +297,7 @@ export default function Dashboard() {
         </div>
 
         {/* Game Results */}
-        {currentGameResult && (
+        {currentGameResult && currentGame && (
           <GameResults
             game={currentGame}
             gameResult={currentGameResult}

@@ -410,8 +410,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         const fallbackStats = roster.length > 0
           ? roster.map((p) => ({
               playerId: p.id,
-              goals: [],
-              assists: [],
+              goals: [] as Array<{ isShorthanded: boolean; isOTGoal: boolean }>,
+              assists: [] as Array<{ isShorthanded: boolean }>,
               position: p.position,
             }))
           : []
